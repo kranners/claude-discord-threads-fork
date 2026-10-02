@@ -34,6 +34,7 @@ import { StatusLine } from './discord/status'
 import { Delivery, type Responder, type TurnContext } from './engine/delivery'
 import { acquireSingleInstanceLock } from './lock'
 import { echoResponder } from './engine/echo'
+import { threadWorkspace } from './engine/worktrees'
 
 loadEnvFile()
 
@@ -161,6 +162,9 @@ async function handleInbound(msg: Message): Promise<void> {
 
   const convo = await resolveConversation(msg, repo)
   const existing = repo.getThread(convo.id)
+  const workspace = existing
+    ? null
+    : await threadWorkspace(repo.getProject(convo.channelId), msg.content)
   const thread =
     existing ??
     repo.createThread({
@@ -169,7 +173,7 @@ async function handleInbound(msg: Message): Promise<void> {
       root_message_id: convo.created ? msg.id : null,
       guild_id: convo.guildId,
       cc_session_id: null,
-      cwd: DEFAULT_CWD,
+      cwd: workspace?.cwd ?? DEFAULT_CWD,
       title: null,
       state: 'open',
       // A new thread inherits the global default set by `/model global`. It is
@@ -187,6 +191,15 @@ async function handleInbound(msg: Message): Promise<void> {
       await syncModelHeader(client, repo, convo.id, { create: true })
     } catch (err) {
       log.debug('could not post model header', { thread: convo.id, error: describeError(err) })
+    }
+  }
+
+  if (workspace) {
+    try {
+      const sent = await (await fetchSendable(client, convo.id)).send(workspace.notice)
+      noteSent(sent.id)
+    } catch (err) {
+      log.debug('could not post workspace notice', { thread: convo.id, error: describeError(err) })
     }
   }
 

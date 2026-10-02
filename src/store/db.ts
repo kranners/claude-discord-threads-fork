@@ -136,6 +136,12 @@ CREATE TABLE IF NOT EXISTS permissions (
   decision    TEXT,
   created_at  INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS projects (
+  channel_id TEXT PRIMARY KEY,
+  repo_path  TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
 `
 
 /**

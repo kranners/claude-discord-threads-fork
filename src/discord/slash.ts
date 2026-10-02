@@ -61,6 +61,11 @@ export const SLASH_COMMANDS: CommandSpec[] = [
     option: { name: 'mode', description: 'auto, default, acceptEdits, plan or dontAsk' },
   },
   { name: 'threads', description: 'List every open thread' },
+  {
+    name: 'project',
+    description: 'Show or set the repo this channel works on; each new thread gets its own worktree',
+    option: { name: 'path', description: 'Path inside a git repo, or "none" to unbind' },
+  },
   { name: 'compact', description: 'Summarise this conversation to free up context (costs tokens)' },
 ]
 

@@ -116,6 +116,28 @@ export class Repo {
     this.setSetting('default_model', model)
   }
 
+  // ---- projects ---------------------------------------------------------
+
+  getProject(channelId: string): string | null {
+    const row = this.db
+      .query<{ repo_path: string }, [string]>('SELECT repo_path FROM projects WHERE channel_id = ?')
+      .get(channelId)
+    return row?.repo_path ?? null
+  }
+
+  setProject(channelId: string, repoPath: string | null): void {
+    if (repoPath === null) {
+      this.db.run('DELETE FROM projects WHERE channel_id = ?', [channelId])
+      return
+    }
+    this.db.run(
+      `INSERT INTO projects (channel_id, repo_path, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(channel_id) DO UPDATE SET
+         repo_path = excluded.repo_path, updated_at = excluded.updated_at`,
+      [channelId, repoPath, Date.now()],
+    )
+  }
+
   /**
    * Forget the conversation but keep the thread. `/clear` uses this: the next
    * message starts a fresh Claude Code session in the same Discord thread.

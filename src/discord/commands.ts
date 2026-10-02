@@ -26,6 +26,7 @@ import { statSync } from 'fs'
 import type { Client } from 'discord.js'
 import type { Repo } from '../store/repo'
 import { availableModels, contextUsage, planUsage } from '../engine/control'
+import { repoRoot } from '../engine/worktrees'
 import { syncModelHeader } from './threads'
 import { DEFAULT_CWD } from '../config'
 import { log, describeError } from '../log'
@@ -59,6 +60,9 @@ const HELP = [
   '_(outside a thread, `/model` is `/model global` — there is no thread to set)_',
   '`/permissions [mode]` — show or set the permission mode',
   '`/compact` — summarise this conversation to free up context _(costs tokens)_',
+  '',
+  '**Project**',
+  '`/project [path]` — bind this channel to a git repo; each new thread gets its own worktree',
   '',
   '**Elsewhere**',
   '`/threads` — every open thread',
@@ -100,6 +104,8 @@ export async function handleCommand(raw: string, ctx: CommandContext): Promise<C
       return reply(permissions(ctx, arg))
     case 'threads':
       return reply(threads(ctx))
+    case 'project':
+      return reply(await project(ctx, arg))
     // /compact is deliberately absent from this switch. Claude Code's own CLI
     // intercepts it before the model, so it only has to reach the worker —
     // handling it here would replace a working implementation with a worse
@@ -136,7 +142,7 @@ function cwd(ctx: CommandContext, arg: string): string {
   if (!thread) return NO_THREAD
   if (!arg) return `Working directory is \`${thread.cwd}\`.\nChange it with \`/cwd /path/to/repo\`.`
 
-  const path = arg.replace(/^~(?=\/|$)/, process.env.HOME ?? '~')
+  const path = expandHome(arg)
   try {
     if (!statSync(path).isDirectory()) return `\`${path}\` is not a directory.`
   } catch {
@@ -144,6 +150,37 @@ function cwd(ctx: CommandContext, arg: string): string {
   }
   ctx.repo.setThreadCwd(ctx.conversationId, path)
   return `Working directory set to \`${path}\`. The conversation continues; only new commands run there.`
+}
+
+function expandHome(path: string): string {
+  return path.replace(/^~(?=\/|$)/, process.env.HOME ?? '~')
+}
+
+async function project(ctx: CommandContext, arg: string): Promise<string> {
+  const channelId = ctx.repo.getThread(ctx.conversationId)?.channel_id ?? ctx.conversationId
+  const current = ctx.repo.getProject(channelId)
+
+  if (!arg) {
+    return current
+      ? `This channel works on \`${current}\`. Each new thread gets its own worktree of it.`
+      : 'This channel has no project. Bind one with `/project /path/to/repo`, ' +
+          'and each new thread here gets its own worktree of it.'
+  }
+
+  if (RESET_WORDS.includes(arg.toLowerCase())) {
+    ctx.repo.setProject(channelId, null)
+    return current
+      ? `Unbound \`${current}\`. New threads here start in the default directory.`
+      : 'This channel has no project to unbind.'
+  }
+
+  const root = await repoRoot(expandHome(arg))
+  if (!root) return `\`${expandHome(arg)}\` is not inside a git repository.`
+  ctx.repo.setProject(channelId, root)
+  return (
+    `This channel now works on \`${root}\`. ` +
+    'Each new thread gets its own worktree and branch; open threads keep their directory.'
+  )
 }
 
 function clear(ctx: CommandContext): string {

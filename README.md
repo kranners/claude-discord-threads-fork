@@ -243,6 +243,7 @@ answer.
 | Elsewhere | |
 |---|---|
 | `/threads` | every open thread |
+| `/project [path]` | bind this channel to a git repo; each new thread gets its own worktree and branch under `.claude/worktrees/` |
 
 A thread is opened on whichever model `/model global` last named, and says so
 in its first message:
