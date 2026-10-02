@@ -27,6 +27,7 @@ import type { Client } from 'discord.js'
 import type { Repo } from '../store/repo'
 import { availableModels, contextUsage, planUsage } from '../engine/control'
 import { repoRoot } from '../engine/worktrees'
+import { describeRule, discordTime, nextRunAt, parseSchedule, ruleOf } from '../engine/schedules'
 import { syncModelHeader } from './threads'
 import { DEFAULT_CWD } from '../config'
 import { log, describeError } from '../log'
@@ -63,6 +64,12 @@ const HELP = [
   '',
   '**Project**',
   '`/project [path]` — bind this channel to a git repo; each new thread gets its own worktree',
+  '',
+  '**Schedules**',
+  '`/schedule every 6h <prompt>` — run a prompt in this thread on an interval (15m or more)',
+  '`/schedule daily 09:00 <prompt>` — run a prompt here every day, in the host’s time zone',
+  '`/schedule` — this thread’s schedules',
+  '`/unschedule <id>` — stop one',
   '',
   '**Elsewhere**',
   '`/threads` — every open thread',
@@ -106,6 +113,11 @@ export async function handleCommand(raw: string, ctx: CommandContext): Promise<C
       return reply(threads(ctx))
     case 'project':
       return reply(await project(ctx, arg))
+    case 'schedule':
+    case 'schedules':
+      return reply(schedule(ctx, arg))
+    case 'unschedule':
+      return reply(unschedule(ctx, arg))
     // /compact is deliberately absent from this switch. Claude Code's own CLI
     // intercepts it before the model, so it only has to reach the worker —
     // handling it here would replace a working implementation with a worse
@@ -448,4 +460,41 @@ function threads(ctx: CommandContext): string {
   })
   if (open.length > 20) lines.push(`_…and ${open.length - 20} more_`)
   return lines.join('\n')
+}
+
+function schedule(ctx: CommandContext, arg: string): string {
+  if (!ctx.repo.getThread(ctx.conversationId)) return NO_THREAD
+  if (!arg) return listSchedules(ctx)
+
+  const spec = parseSchedule(arg)
+  if ('error' in spec) return spec.error
+  const row = ctx.repo.addSchedule(ctx.conversationId, spec, nextRunAt(spec, Date.now()))
+  return (
+    `Schedule #${row.id} runs ${describeRule(spec)}, next ${discordTime(row.next_run_at)}.\n` +
+    `Stop it with \`/unschedule ${row.id}\`.`
+  )
+}
+
+function listSchedules(ctx: CommandContext): string {
+  const rows = ctx.repo.threadSchedules(ctx.conversationId)
+  if (rows.length === 0) {
+    return 'No schedules in this thread. Add one with `/schedule every 6h <prompt>` or `/schedule daily 09:00 <prompt>`.'
+  }
+  return rows
+    .map(
+      row =>
+        `**#${row.id}** ${describeRule(ruleOf(row))} · next ${discordTime(row.next_run_at)}\n` +
+        `> ${row.prompt.replace(/\s+/g, ' ').slice(0, 200)}`,
+    )
+    .join('\n')
+}
+
+function unschedule(ctx: CommandContext, arg: string): string {
+  const id = Number(arg.replace(/^#/, ''))
+  if (!arg || !Number.isInteger(id) || id <= 0) {
+    return 'Name the schedule to stop, e.g. `/unschedule 3`. `/schedule` lists them.'
+  }
+  return ctx.repo.deleteSchedule(id, ctx.conversationId)
+    ? `Stopped schedule #${id}.`
+    : `This thread has no schedule #${id}. \`/schedule\` lists them.`
 }

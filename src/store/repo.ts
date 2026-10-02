@@ -7,7 +7,8 @@
  */
 
 import type { Database } from 'bun:sqlite'
-import type { ThreadRow, TurnRow, TurnState } from './db'
+import type { ScheduleRow, ThreadRow, TurnRow, TurnState } from './db'
+import type { ScheduleSpec } from '../engine/schedules'
 
 export class Repo {
   constructor(private db: Database) {}
@@ -378,6 +379,54 @@ export class Repo {
          updated_at = excluded.updated_at`,
       [channelId, messageId, Date.now()],
     )
+  }
+
+  // ---- schedules --------------------------------------------------------
+
+  addSchedule(threadId: string, spec: ScheduleSpec, nextRunAt: number): ScheduleRow {
+    const inserted = this.db.run(
+      `INSERT INTO schedules
+         (thread_id, kind, every_ms, minute_of_day, prompt, next_run_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        threadId,
+        spec.kind,
+        spec.kind === 'every' ? spec.everyMs : null,
+        spec.kind === 'daily' ? spec.minuteOfDay : null,
+        spec.prompt,
+        nextRunAt,
+        Date.now(),
+      ],
+    )
+    return this.db
+      .query<ScheduleRow, [number]>('SELECT * FROM schedules WHERE id = ?')
+      .get(Number(inserted.lastInsertRowid))!
+  }
+
+  threadSchedules(threadId: string): ScheduleRow[] {
+    return this.db
+      .query<ScheduleRow, [string]>('SELECT * FROM schedules WHERE thread_id = ? ORDER BY id')
+      .all(threadId)
+  }
+
+  dueSchedules(now: number): ScheduleRow[] {
+    return this.db
+      .query<ScheduleRow, [number]>(
+        'SELECT * FROM schedules WHERE next_run_at <= ? ORDER BY next_run_at',
+      )
+      .all(now)
+  }
+
+  setScheduleNextRun(id: number, nextRunAt: number): void {
+    this.db.run('UPDATE schedules SET next_run_at = ? WHERE id = ?', [nextRunAt, id])
+  }
+
+  deleteSchedule(id: number, threadId?: string): boolean {
+    const deleted =
+      threadId === undefined
+        ? this.db.run('DELETE FROM schedules WHERE id = ?', [id])
+        : this.db.run('DELETE FROM schedules WHERE id = ? AND thread_id = ?', [id, threadId])
+    return deleted.changes > 0
   }
 }
 

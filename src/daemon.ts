@@ -12,10 +12,11 @@ import {
   ARCHIVE_SWEEP_MS,
   DEFAULT_CWD,
   loadEnvFile,
+  MAX_CHUNK_LIMIT,
   MAX_LIVE_WORKERS,
   THREAD_IDLE_MS,
 } from './config'
-import { openDb, type TurnRow } from './store/db'
+import { openDb, type ScheduleRow, type TurnRow } from './store/db'
 import { Repo } from './store/repo'
 import { gate, loadAccess, noteSent, watchApprovals } from './discord/access'
 import { Signals } from './discord/signals'
@@ -35,6 +36,7 @@ import { Delivery, type Responder, type TurnContext } from './engine/delivery'
 import { acquireSingleInstanceLock } from './lock'
 import { echoResponder } from './engine/echo'
 import { threadWorkspace } from './engine/worktrees'
+import { nextRunAt, ruleOf, SCHEDULE_TICK_MS } from './engine/schedules'
 
 loadEnvFile()
 
@@ -288,13 +290,14 @@ async function enqueueSyntheticTurn(
   conversationId: string,
   content: string,
   userId: string,
+  inboundMessageId = `slash-${conversationId}-${Date.now()}`,
 ): Promise<boolean> {
   const thread = repo.getThread(conversationId)
   if (!thread) return false
 
   const turn = repo.enqueueTurn({
     threadId: conversationId,
-    inboundMessageId: `slash-${conversationId}-${Date.now()}`,
+    inboundMessageId,
     authorId: userId,
     content,
   })
@@ -310,6 +313,43 @@ async function enqueueSyntheticTurn(
     permissionMode: thread.permission_mode,
   })
   return true
+}
+
+const DISCORD_UNKNOWN_CHANNEL = 10003
+
+function isUnknownChannel(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === DISCORD_UNKNOWN_CHANNEL
+}
+
+async function runDueSchedules(): Promise<void> {
+  const now = Date.now()
+  const due = repo.dueSchedules(now)
+  for (const schedule of due) {
+    repo.setScheduleNextRun(schedule.id, nextRunAt(ruleOf(schedule), now, schedule.next_run_at))
+  }
+  for (const schedule of due) await fireSchedule(schedule)
+}
+
+async function fireSchedule(schedule: ScheduleRow): Promise<void> {
+  try {
+    const ch = await fetchSendable(client, schedule.thread_id)
+    const sent = await ch.send(`⏰ Schedule #${schedule.id}: ${schedule.prompt}`.slice(0, MAX_CHUNK_LIMIT))
+    noteSent(sent.id)
+  } catch (err) {
+    if (isUnknownChannel(err)) {
+      repo.deleteSchedule(schedule.id)
+      log.warn('removed a schedule whose thread is gone', { schedule: schedule.id, thread: schedule.thread_id })
+    } else {
+      log.warn('skipped a scheduled run', { schedule: schedule.id, error: describeError(err) })
+    }
+    return
+  }
+  await enqueueSyntheticTurn(
+    schedule.thread_id,
+    schedule.prompt,
+    `schedule-${schedule.id}`,
+    `schedule-${schedule.id}-${schedule.next_run_at}`,
+  )
 }
 
 async function sendTyping(channelId: string): Promise<void> {
@@ -428,6 +468,14 @@ client.once('clientReady', async c => {
   await registerGuildCommands(client, await guildIdsForOptedInChannels())
   const sweep = setInterval(() => void sweepIdleThreads(), ARCHIVE_SWEEP_MS)
   if (typeof sweep === 'object' && 'unref' in sweep) sweep.unref()
+  const scheduler = setInterval(
+    () =>
+      void runDueSchedules().catch(err =>
+        log.error('scheduler tick failed', { error: describeError(err) }),
+      ),
+    SCHEDULE_TICK_MS,
+  )
+  if (typeof scheduler === 'object' && 'unref' in scheduler) scheduler.unref()
   const recovered = await delivery.recover(hydrate)
   const replayed = await replayBacklog()
   log.info('recovery complete', {

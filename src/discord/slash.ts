@@ -66,6 +66,16 @@ export const SLASH_COMMANDS: CommandSpec[] = [
     description: 'Show or set the repo this channel works on; each new thread gets its own worktree',
     option: { name: 'path', description: 'Path inside a git repo, or "none" to unbind' },
   },
+  {
+    name: 'schedule',
+    description: 'Run a prompt in this thread on a schedule, or list its schedules',
+    option: { name: 'rule', description: '"every 6h <prompt>" or "daily 09:00 <prompt>"; empty to list' },
+  },
+  {
+    name: 'unschedule',
+    description: 'Stop one of this thread’s schedules',
+    option: { name: 'id', description: 'The schedule number shown by /schedule', required: true },
+  },
   { name: 'compact', description: 'Summarise this conversation to free up context (costs tokens)' },
 ]
 

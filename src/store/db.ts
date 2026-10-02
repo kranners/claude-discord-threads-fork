@@ -69,6 +69,17 @@ export type TurnRow = {
   updated_at: number
 }
 
+export type ScheduleRow = {
+  id: number
+  thread_id: string
+  kind: 'every' | 'daily'
+  every_ms: number | null
+  minute_of_day: number | null
+  prompt: string
+  next_run_at: number
+  created_at: number
+}
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS threads (
   thread_id       TEXT PRIMARY KEY,
@@ -142,6 +153,19 @@ CREATE TABLE IF NOT EXISTS projects (
   repo_path  TEXT NOT NULL,
   updated_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS schedules (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  thread_id     TEXT NOT NULL,
+  kind          TEXT NOT NULL,
+  every_ms      INTEGER,
+  minute_of_day INTEGER,
+  prompt        TEXT NOT NULL,
+  next_run_at   INTEGER NOT NULL,
+  created_at    INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS schedules_due ON schedules (next_run_at);
 `
 
 /**

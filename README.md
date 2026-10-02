@@ -245,6 +245,13 @@ answer.
 | `/threads` | every open thread |
 | `/project [path]` | bind this channel to a git repo; each new thread gets its own worktree and branch under `.claude/worktrees/` |
 
+| Schedules | |
+|---|---|
+| `/schedule every 6h <prompt>` | run a prompt in this thread on an interval, 15m or more |
+| `/schedule daily 09:00 <prompt>` | run a prompt in this thread every day, in the host's time zone |
+| `/schedule` | list this thread's schedules |
+| `/unschedule <id>` | stop one |
+
 A thread is opened on whichever model `/model global` last named, and says so
 in its first message:
 
