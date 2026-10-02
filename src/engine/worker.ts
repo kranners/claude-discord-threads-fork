@@ -16,6 +16,7 @@
 
 import { query, type Options, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import type { Responder, ResponderResult, TurnContext } from './delivery'
+import { claudeExecutableOption } from '../config'
 
 /** Retry ceiling when Discord gives us no better hint. */
 const DEFAULT_RETRY_MS = 60_000
@@ -65,6 +66,7 @@ export function makeClaudeResponder(workerOpts: WorkerOptions = {}): Responder {
   return async (ctx: TurnContext): Promise<ResponderResult> => {
     const canUseTool = workerOpts.canUseToolFor?.(ctx)
     const options: Options = {
+      ...claudeExecutableOption(),
       cwd: ctx.cwd,
       // Keep Claude Code's own system prompt and append to it, rather than
       // replacing it — the worker should behave like a normal session.

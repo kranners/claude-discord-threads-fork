@@ -309,6 +309,7 @@ Environment variables, all optional:
 | `DISCORD_PERMISSION_TIMEOUT_MS` | how long a prompt waits for a button (default 5 min) |
 | `DISCORD_THREAD_IDLE_MS` | archive a thread after this long idle (default 24h) |
 | `DISCORD_WORKER_CWD` | default working directory for new threads |
+| `CLAUDE_CODE_EXECUTABLE` | Claude Code binary for workers, e.g. a Nix-managed `claude` (default: the SDK's bundled one) |
 | `DISCORD_RESPONDER=echo` | echo instead of calling the model |
 | `DISCORD_LOG_LEVEL` / `DISCORD_LOG_JSON` | `debug`–`error`; `1` for JSON lines |
 

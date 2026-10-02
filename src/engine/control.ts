@@ -14,6 +14,7 @@
 
 import { query, type Options } from '@anthropic-ai/claude-agent-sdk'
 import { log, describeError } from '../log'
+import { claudeExecutableOption } from '../config'
 
 /** A prompt that never produces a message, so the CLI idles awaiting input. */
 async function* silent(): AsyncGenerator<never> {
@@ -30,7 +31,7 @@ export async function withControlSession<T>(
   options: Options,
   fn: (q: Awaited<ReturnType<typeof query>>) => Promise<T>,
 ): Promise<T> {
-  const q = query({ prompt: silent(), options })
+  const q = query({ prompt: silent(), options: { ...claudeExecutableOption(), ...options } })
   try {
     return await fn(q)
   } finally {

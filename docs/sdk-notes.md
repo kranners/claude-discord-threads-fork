@@ -17,7 +17,7 @@ An `AsyncIterable` prompt is what gives us a session that stays alive across man
 Discord messages: push a `SDKUserMessage` per inbound message and read one
 `result` back per turn.
 
-Options we rely on: `resume` (session id), `cwd`, `settingSources`,
+Options we rely on: `resume` (session id), `cwd`, `pathToClaudeCodeExecutable`, `settingSources`,
 `allowedTools` / `disallowedTools`, `permissionMode`, `permissionPrompts`
 (`'host' | 'none'`), `canUseTool`, `plugins`.
 

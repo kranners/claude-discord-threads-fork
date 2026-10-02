@@ -9,6 +9,7 @@
 import { readFileSync, chmodSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
+import type { Options } from '@anthropic-ai/claude-agent-sdk'
 
 export const STATE_DIR =
   process.env.DISCORD_STATE_DIR ?? join(homedir(), '.claude', 'channels', 'discord')
@@ -44,6 +45,11 @@ export function loadEnvFile(): void {
  */
 export const DEFAULT_CWD =
   process.env.DISCORD_WORKER_CWD ?? process.env.HOME ?? process.cwd()
+
+export function claudeExecutableOption(): Pick<Options, 'pathToClaudeCodeExecutable'> {
+  const path = process.env.CLAUDE_CODE_EXECUTABLE
+  return path ? { pathToClaudeCodeExecutable: path } : {}
+}
 
 /** Discord's hard cap on message length. Sends above this are rejected. */
 export const MAX_CHUNK_LIMIT = 2000
